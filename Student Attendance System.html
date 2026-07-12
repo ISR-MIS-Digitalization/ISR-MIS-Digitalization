@@ -3936,7 +3936,7 @@ function checkPopupBlocked() {
 
 function fetchStudentList(date = null) { 
   return new Promise((resolve, reject) => { 
-    google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getStudentList(currentUser.classSection, date || getTodayDate()); 
+    google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getStudentList(currentUser.classSection, date || getTodayDate(), currentUser.recId);
   }); 
 }
 
