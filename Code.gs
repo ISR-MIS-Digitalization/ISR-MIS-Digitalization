@@ -38,7 +38,7 @@ function initializeUserCache() {
 }
 
 // Us date pe jin class-sections ki NORMAL attendance mark ho chuki hai un ki list
-function getMarkedClassSections(date) {
+function getMarkedClassSections(date, recId) {
   try {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Student_Attendance');
     if (!sheet) return [];
@@ -48,6 +48,7 @@ function getMarkedClassSections(date) {
     const dateCol = headers.indexOf('Date');
     const classCol = headers.indexOf('Class_Section');
     const typeCol = headers.indexOf('Attendance_Type');
+    const recIdCol = headers.indexOf('REC_ID'); 
     if (dateCol === -1 || classCol === -1) return [];
     const targetDate = new Date(date).toLocaleDateString('en-CA');
     const marked = new Set();
@@ -55,6 +56,10 @@ function getMarkedClassSections(date) {
       let rowDate;
       try { rowDate = new Date(data[i][dateCol]).toLocaleDateString('en-CA'); } catch (e) { continue; }
       if (rowDate !== targetDate) continue;
+      if (recIdCol !== -1 && recId) {
+        const rowRec = String(data[i][recIdCol] || '').trim();
+        if (rowRec !== '' && rowRec !== String(recId).trim()) continue;
+      }
       if (typeCol !== -1 && data[i][typeCol] === 'Episodic') continue; // sirf normal attendance
       if (data[i][classCol]) marked.add(data[i][classCol]);
     }
@@ -977,7 +982,7 @@ function markAttendance(attendanceData, class_section, date, username, isBarcode
     // -------------------------------------------------
     // NEW: Check that hours & category are defined for the day
     // -------------------------------------------------
-const hoursCheck = checkDailyHours(date, class_section, 'normal');
+const hoursCheck = checkDailyHours(date, class_section, 'normal', recId);
 console.log('Hours check result:', hoursCheck);  // Add this for debugging
 
     if (!hoursCheck.exists) {
@@ -1428,7 +1433,7 @@ function markEpisodicAttendance(studentStatuses, classSection, date, username, e
     // 4. HOURS VALIDATION - Check that hours & category are defined for the day
     // CRITICAL: Episodic attendance also needs hours validation
     // ========================================================
-const hoursCheck = checkDailyHours(date, classSection, 'episodic');
+const hoursCheck = checkDailyHours(date, classSection, 'episodic', recId);
 
 let finalHours = hours;
 let finalCategory = category;
@@ -1681,7 +1686,7 @@ newRow[categoryCol] = finalCategory;
 // ========================================================
 SpreadsheetApp.flush();
 
-const episodicHoursExist = checkDailyHours(date, classSection, 'episodic');
+const episodicHoursExist = checkDailyHours(date, classSection, 'episodic', recId);
 
 if (!episodicHoursExist.exists) {
   // No episodic hours for this date/class - safe to save
@@ -1793,18 +1798,23 @@ function getHoursOptions(type = 'normal') {
 }
 
 // NEW: Check if hours/category are set for a date and class_section
-function checkDailyHours(date, classSection, attendanceType = null) {
+function checkDailyHours(date, classSection, attendanceType = null, recId = null) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Daily_Hours_Setup');
   if (!sheet) throw new Error('Daily_Hours_Setup sheet not found');
   
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
   const typeCol = headers.indexOf('Attendance_Type');
+  const recIdCol = headers.indexOf('REC_ID'); 
   const targetDate = new Date(date).toLocaleDateString('en-CA');
   
   for (let i = 1; i < data.length; i++) {
     const rowDate = new Date(data[i][0]).toLocaleDateString('en-CA');
     if (rowDate === targetDate && data[i][1] === classSection) {
+      if (recIdCol !== -1 && recId) {
+        const rowRec = String(data[i][recIdCol] || '').trim();
+        if (rowRec !== '' && rowRec !== String(recId).trim()) continue;
+      }
       const rowType = (typeCol !== -1 && data[i][typeCol]) ? String(data[i][typeCol]) : 'normal';
       
       // If type specified (like 'normal' or 'episodic'), only match that type
@@ -1857,7 +1867,9 @@ function setDailyHours(entries, attendanceType = 'normal', recId = '') {
       
       for (let i = 1; i < existingData.length; i++) {
         const rowDate = new Date(existingData[i][0]).toLocaleDateString('en-CA');
-        if (rowDate === targetDate && existingData[i][1] === entry.classSection) {
+        const rowRec = recIdColIndex !== -1 ? String(existingData[i][recIdColIndex] || '').trim() : '';
+        const recMatches = !recId || recIdColIndex === -1 || rowRec === '' || rowRec === String(recId).trim();
+        if (rowDate === targetDate && existingData[i][1] === entry.classSection && recMatches) {
           
           // ✅ CRITICAL FIX: Get the existing Attendance_Type
           const existingType = existingData[i][typeColIndex] || 'normal';

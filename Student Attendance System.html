@@ -2826,7 +2826,7 @@ function checkEpisodicHoursStatus() {
       statusText.innerHTML = `<i class="fas fa-times-circle"></i> Unable to check hours status`;
       statusDiv.classList.remove("d-none");
     })
-.checkDailyHours(date, classSection, 'episodic');
+.checkDailyHours(date, classSection, 'episodic', currentUser.recId);
 
 }
 
@@ -2992,7 +2992,7 @@ function loadExistingAttendance() {
     .withFailureHandler(() => {
       loadEpisodicStudentList();
     })
-    .checkDailyHours(date, classSection);
+    .checkDailyHours(date, classSection, null, currentUser.recId);
 }
 
 
@@ -3075,7 +3075,7 @@ google.script.run
     showPopup("Warning", "Could not verify hours. Continuing with your selection.");
     continueEpisodicSubmission();
   })
-  .checkDailyHours(date, classSection);
+  .checkDailyHours(date, classSection, null, currentUser.recId);
   
   // Continue with actual submission after hours validation passes
   function continueEpisodicSubmission() {
@@ -3564,7 +3564,7 @@ function checkAndPromptHours(date, classSection, callback) {
             .withFailureHandler(() => {
               callback(null);
             })
-            .checkDailyHours(date, classSection);
+            .checkDailyHours(date, classSection, null, currentUser.recId);
         }); 
       } 
     })
@@ -3573,7 +3573,7 @@ function checkAndPromptHours(date, classSection, callback) {
       showPopup("Error", err.message); 
       callback(null);
     })
-    .checkDailyHours(date, classSection); 
+    .checkDailyHours(date, classSection, null, currentUser.recId); 
 }
 
 function showSingleHoursSetup(date, classSection, callback) { 
@@ -3651,7 +3651,7 @@ function loadHoursStatus() {
           showLoading(false);
           displayHoursStatus(data, date, []);
         })
-        .getMarkedClassSections(date);
+        .getMarkedClassSections(date, currentUser.recId);
     })
     .withFailureHandler(err => { 
       showLoading(false); 
@@ -3695,7 +3695,7 @@ function showSingleHoursSetupFromStatus() {
       showLoading(false);
       showSingleHoursSetup(date, currentUser.classSection, () => loadHoursStatus());
     })
-    .getMarkedClassSections(date);
+    .getMarkedClassSections(date, currentUser.recId);
 }
 
 function showBatchHoursFromStatus() { 
@@ -3744,7 +3744,7 @@ function showBatchHoursFromStatus() {
         resolve();
       })
       .withFailureHandler(() => resolve())
-      .getMarkedClassSections(date);
+      .getMarkedClassSections(date, currentUser.recId);
   });
 
   // Sab load hone ke BAAD page dikhao
@@ -6050,7 +6050,7 @@ newEventName.addEventListener("change", function() {
         .withFailureHandler(() => {
           loadEpisodicStudentList();
         })
-.checkDailyHours(selectedDate, classSection);
+.checkDailyHours(selectedDate, classSection, null, currentUser.recId);
 
     } else if (selectedDate < today) {
       showLoading(true, "Checking term and hours validity...");
@@ -6085,7 +6085,7 @@ newEventName.addEventListener("change", function() {
               this.value = today;
               loadEpisodicStudentList();
             })
-.checkDailyHours(selectedDate, classSection);
+.checkDailyHours(selectedDate, classSection, null, currentUser.recId);
         })
         .withFailureHandler(err => {
           showLoading(false);
