@@ -2791,7 +2791,7 @@ const classSection = currentUser ? currentUser.classSection : null;
       showLoading(false);
       showPopup("Error", "Failed to load students: " + err.message);
     })
-    .getEpisodicStudentList(classSection, date, eventName || '');
+    .getEpisodicStudentList(classSection, date, eventName || '', currentUser.recId);
 }
 
 
@@ -3657,7 +3657,7 @@ function loadHoursStatus() {
       showLoading(false); 
       showPopup("Error", err.message); 
     })
-    .getHoursStatus(date); 
+    .getHoursStatus(date, currentUser.recId); 
 }
 
 function displayHoursStatus(data, date, markedClasses = []) { 
@@ -3802,7 +3802,7 @@ function submitBatchHoursUpdate() {
       showLoading(false); 
       showPopup("Error", err.message); 
     })
-    .updateBatchHours(date, cls, hrs, cat, currentUser.username); 
+    .updateBatchHours(date, cls, hrs, cat, currentUser.username, currentUser.recId); 
 }
 
 // Submit batch hours form
@@ -5152,7 +5152,7 @@ showLoading(false);
       showLoading(false);
       showPopup('Error', `Failed to load students: ${error.message}`, 'error');
     })
-    .getAllStudents(classSection);
+    .getAllStudents(classSection, currentUser.recId);
 }
 
 function loadStudentMonths() {
@@ -5316,7 +5316,7 @@ function generateDailyReport() {
       showLoading(false);
       showPopup('Error', `Failed to generate report: ${error.message}`, 'error');
     })
-    .generateStudentAttendanceReport(date, classSection);
+    .generateStudentAttendanceReport(date, classSection, currentUser.recId);
 }
 
 function generateMonthlyReport() {
@@ -5404,7 +5404,7 @@ function generateMonthlyReport() {
         showLoading(false);
         showPopup('Error', `Failed to generate summary: ${error.message}`, 'error');
       })
-      .generateStudentMonthlySummary(studentId, month, year);
+      .generateStudentMonthlySummary(studentId, month, year, currentUser.recId);
       
   } else {
     showLoading(true, "Generating class summary...");
@@ -5422,7 +5422,7 @@ function generateMonthlyReport() {
             google.script.run
               .withSuccessHandler(summary => resolve(summary))
               .withFailureHandler(() => resolve(null))
-              .generateStudentMonthlySummary(student.studentId, month, year);
+              .generateStudentMonthlySummary(student.studentId, month, year, currentUser.recId);
           });
         });
         
@@ -5547,7 +5547,7 @@ function generateMonthlyReport() {
         showLoading(false);
         showPopup('Error', `Failed to load students: ${error.message}`, 'error');
       })
-      .getAllStudents(classSection);
+      .getAllStudents(classSection, currentUser.recId);
   }
 }
 

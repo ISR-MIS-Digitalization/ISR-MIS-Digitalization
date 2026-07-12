@@ -805,7 +805,7 @@ function getStudentList(classSection, date, recId) {
  * @param {string} eventName - Name of the episodic event
  * @returns {Array} - Students with attendanceStatus set to 'Present' or 'Not Applicable'
  */
-function getEpisodicStudentList(classSection, date, eventName) {
+function getEpisodicStudentList(classSection, date, eventName, recId) {
   try {
     Logger.log(`getEpisodicStudentList called with classSection: ${classSection}, date: ${date}, eventName: ${eventName}`);
     
@@ -825,6 +825,7 @@ function getEpisodicStudentList(classSection, date, eventName) {
     const classCol = studentHeaders.indexOf('Student_Class');
     const sectionCol = studentHeaders.indexOf('Student_Section');
     const statusCol = studentHeaders.indexOf('Status');
+    const recIdCol = studentHeaders.indexOf('REC_ID');
     const dojCol = studentHeaders.indexOf('Date_of_Joining');
     
     const studentData = studentSheet.getDataRange().getValues();
@@ -836,11 +837,13 @@ function getEpisodicStudentList(classSection, date, eventName) {
       const studentStatus = studentData[i][statusCol] ? studentData[i][statusCol].toString().toLowerCase() : '';
       const dateOfJoining = parseSheetDate(studentData[i][dojCol]);
       const shouldIncludeByDate = !dateOfJoining || dateOfJoining <= targetDate;
-      
+      const rowRec = (recIdCol !== -1) ? String(studentData[i][recIdCol] || '').trim() : '';
+      const recMatch = !recId || recIdCol === -1 || rowRec === '' || rowRec === String(recId).trim();
+
       if (studentData[i][classCol] === className && 
           studentData[i][sectionCol] === section && 
           studentStatus === 'active' &&
-          shouldIncludeByDate) {
+          shouldIncludeByDate && recMatch) {
         
         studentsMap.set(String(studentData[i][stdIdCol]), {
           Std_ID: String(studentData[i][stdIdCol]),
@@ -874,7 +877,8 @@ function getEpisodicStudentList(classSection, date, eventName) {
     const typeColAtt = headers.indexOf('Attendance_Type');
     const eventColAtt = headers.indexOf('Event_Name');
     const statusColAtt = headers.indexOf('Status');
-    
+    const recIdColAtt = headers.indexOf('REC_ID');
+
     const targetDateStr = new Date(date).toLocaleDateString('en-CA');
     
     // Create a map of studentId -> status ONLY for EPISODIC records
@@ -886,7 +890,8 @@ function getEpisodicStudentList(classSection, date, eventName) {
       const rowType = row[typeColAtt];
       const rowEvent = row[eventColAtt];
       const rowClass = row[classColAtt];
-      
+      const rowRecAtt = (recIdColAtt !== -1) ? String(row[recIdColAtt] || '').trim() : '';
+      if (recId && recIdColAtt !== -1 && rowRecAtt !== '' && rowRecAtt !== String(recId).trim()) continue;
       // ✅ CRITICAL: Only match EPISODIC type!
       if (rowDate === targetDateStr &&
           rowType === 'Episodic' &&           // ← ONLY Episodic records
@@ -1089,8 +1094,9 @@ for (let i = 1; i < existingRecords.length; i++) { // skip header row
   }
 
   const rowClassSection = rowData[headerMap.get('Class_Section')];
-
-  if (rowDateStr === targetDateString && rowClassSection === class_section) {
+  const rowRec = (recIdCol !== undefined) ? String(rowData[recIdCol] || '').trim() : '';
+  const recMatches = !recId || recIdCol === undefined || rowRec === '' || rowRec === String(recId).trim();
+  if (rowDateStr === targetDateString && rowClassSection === class_section && recMatches) {
     existingRecordsByStudentDate.set(stdId, {
       rowIndex: i + 1,
       data: rowData,
@@ -1496,7 +1502,7 @@ if (hoursCheck.exists) {
     // ========================================================
     // 7. Get all students for this class
     // ========================================================
-    const allStudents = getStudentList(classSection, date);
+    const allStudents = getStudentList(classSection, date, recId);
     const studentMap = new Map();
     allStudents.forEach(s => {
       studentMap.set(String(s.Std_ID), s);
@@ -1520,11 +1526,11 @@ if (hoursCheck.exists) {
       }
       const rowType = row[typeCol];
       const rowEvent = row[eventCol];
-      
+      const rowRec = (recIdCol !== undefined) ? String(row[recIdCol] || '').trim() : '';
       if (rowClass === classSection &&
           rowDate === targetDate &&
           rowType === 'Episodic' &&
-          rowEvent === eventName) {
+          rowEvent === eventName && recMatches) {
         const studentId = String(row[stdIdCol]);
         existingRecords.set(studentId, {
           rowIndex: i + 1,
@@ -1943,7 +1949,7 @@ function setDailyHours(entries, attendanceType = 'normal', recId = '') {
 // Add these functions to your existing GS code
 
 // DEBUG: Get hours conflicts for a specific date and username
-function getHoursConflicts(date, username) {
+function getHoursConflicts(date, username, recId) {
   try {
     console.log('getHoursConflicts called with:', date, username);
     
@@ -1953,6 +1959,7 @@ function getHoursConflicts(date, username) {
     
     console.log('Sheet headers:', headers);
     
+    const recIdCol = headers.indexOf('REC_ID');
     const dateCol = headers.indexOf('Date');
     const teacherCol = headers.indexOf('Teacher_ID');
     const classSectionCol = headers.indexOf('Class_Section');
@@ -1987,10 +1994,12 @@ function getHoursConflicts(date, username) {
         
         const isSameDate = rowDate === targetDate;
         const isDifferentTeacher = row[teacherCol] && row[teacherCol] !== username;
+        const rowRec = (recIdCol !== -1) ? String(row[recIdCol] || '').trim() : '';
+        const recMatches = !recId || recIdCol === -1 || rowRec === '' || rowRec === String(recId).trim();
         
         console.log(`Row ${index + 2}: date=${rowDate}, teacher=${row[teacherCol]}, isSameDate=${isSameDate}, isDifferentTeacher=${isDifferentTeacher}`);
         
-        return isSameDate && isDifferentTeacher;
+        return isSameDate && isDifferentTeacher && recMatches;
       })
       .map(row => {
         const conflict = {
@@ -2013,7 +2022,7 @@ function getHoursConflicts(date, username) {
 }
 
 // FIXED: Get class sections with hours status - properly filtered by user
-function getClassSectionsWithHoursStatus(date, username) {
+function getClassSectionsWithHoursStatus(date, username, recId) {
   try {
     const sheet = getHoursSheet();
     const data = sheet.getDataRange().getValues();
@@ -2023,7 +2032,8 @@ function getClassSectionsWithHoursStatus(date, username) {
     const classSectionCol = headers.indexOf('Class_Section');
     const hoursCol = headers.indexOf('Hours');
     const categoryCol = headers.indexOf('Category');
-    
+    const recIdCol = headers.indexOf('REC_ID');
+
     const existingHours = {};
     const targetDate = new Date(date).toLocaleDateString('en-CA');
     
@@ -2032,6 +2042,8 @@ function getClassSectionsWithHoursStatus(date, username) {
         .filter(row => {
           if (!row[dateCol]) return false;
           const rowDate = new Date(row[dateCol]).toLocaleDateString('en-CA');
+          const rowRec = (recIdCol !== -1) ? String(row[recIdCol] || '').trim() : '';
+          if (recId && recIdCol !== -1 && rowRec !== '' && rowRec !== String(recId).trim()) return false;
           return rowDate === targetDate;
         })
         .forEach(row => {
@@ -2085,7 +2097,7 @@ function getClassSectionsWithHoursStatus(date, username) {
 // NEW: Handle batch hours form submission
 function handleBatchHoursSubmission(formData) {
   const lock = LockService.getScriptLock();
-  
+  const recId = formData.recId || '';
   try {
     if (!lock.tryLock(10000)) {
       throw new Error('Unable to acquire lock. Please try again.');
@@ -2097,7 +2109,7 @@ function handleBatchHoursSubmission(formData) {
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
     const now = new Date().toLocaleString();
-    
+    const recIdCol = headers.indexOf('REC_ID');
     let successCount = 0;
     
     formData.entries.forEach(entry => {
@@ -2107,12 +2119,15 @@ function handleBatchHoursSubmission(formData) {
       // Check for existing entry
       for (let i = 1; i < data.length; i++) {
         const rowDate = new Date(data[i][0]).toLocaleDateString('en-CA');
-        if (rowDate === targetDate && data[i][1] === entry.classSection) {
+        const rowRec = (recIdCol !== -1) ? String(data[i][recIdCol] || '').trim() : '';
+        const recMatches = !recId || recIdCol === -1 || rowRec === '' || rowRec === String(recId).trim();
+        if (rowDate === targetDate && data[i][1] === entry.classSection && recMatches) {
           // Update existing
           sheet.getRange(i + 1, 3).setValue(entry.category); // Category
           sheet.getRange(i + 1, 4).setValue(entry.hours);   // Hours
           sheet.getRange(i + 1, 5).setValue(entry.teacherId); // Teacher ID
           sheet.getRange(i + 1, 6).setValue(now);           // Timestamp
+          if (recIdCol !== -1) sheet.getRange(i + 1, recIdCol + 1).setValue(recId);
           found = true;
           successCount++;
           break;
@@ -2129,6 +2144,7 @@ function handleBatchHoursSubmission(formData) {
           entry.teacherId,
           now
         ]);
+        if (recIdCol !== -1) sheet.getRange(sheet.getLastRow(), recIdCol + 1).setValue(recId);
         successCount++;
       }
     });
@@ -2154,12 +2170,13 @@ function getHoursSheet() {
 }
 
 // Get hours status for dashboard visualization
-function getHoursStatus(date) {
+function getHoursStatus(date, recId) {
   try {
     const sheet = getHoursSheet();
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
     
+    const recIdCol = headers.indexOf('REC_ID');
     const dateCol = headers.indexOf('Date');
     const classSectionCol = headers.indexOf('Class_Section');
     const hoursCol = headers.indexOf('Hours');
@@ -2172,6 +2189,8 @@ function getHoursStatus(date) {
     data.slice(1)
       .filter(row => {
         if (!row[dateCol]) return false;
+        const rowRec = (recIdCol !== -1) ? String(row[recIdCol] || '').trim() : '';
+        if (recId && recIdCol !== -1 && rowRec !== '' && rowRec !== String(recId).trim()) return false;
         const rowDate = new Date(row[dateCol]).toLocaleDateString('en-CA');
         return rowDate === targetDate;
       })
@@ -2192,7 +2211,7 @@ function getHoursStatus(date) {
 }
 
 // NEW: Update batch hours for existing attendance records
-function updateBatchHours(date, classSection, category, hours, username) {
+function updateBatchHours(date, classSection, category, hours, username, recId) {
   const lock = LockService.getScriptLock();
   
   try {
@@ -2205,14 +2224,17 @@ function updateBatchHours(date, classSection, category, hours, username) {
     if (!hoursSheet) throw new Error('Daily_Hours_Setup sheet not found');
     
     const hoursData = hoursSheet.getDataRange().getValues();
+    const hoursRecCol = hoursData[0].indexOf('REC_ID');
     const targetDate = new Date(date).toLocaleDateString('en-CA');
     let updatedHoursSetup = false;
     const now = new Date().toLocaleString();
-    
+    const hRowRec = (hoursRecCol !== -1) ? String(hoursData[i][hoursRecCol] || '').trim() : '';
+    const hRecMatches = !recId || hoursRecCol === -1 || hRowRec === '' || hRowRec === String(recId).trim();
     // Update or create entry in Daily_Hours_Setup
     for (let i = 1; i < hoursData.length; i++) {
       const rowDate = new Date(hoursData[i][0]).toLocaleDateString('en-CA');
-      if (rowDate === targetDate && hoursData[i][1] === classSection) {
+      if (rowDate === targetDate && hoursData[i][1] === classSection && hRecMatches) {
+        if (hoursRecCol !== -1) hoursSheet.getRange(i + 1, hoursRecCol + 1).setValue(recId);
         hoursSheet.getRange(i + 1, 3).setValue(category); // Category
         hoursSheet.getRange(i + 1, 4).setValue(hours);   // Hours
         hoursSheet.getRange(i + 1, 5).setValue(username); // Teacher ID
@@ -2224,6 +2246,7 @@ function updateBatchHours(date, classSection, category, hours, username) {
     
     if (!updatedHoursSetup) {
       hoursSheet.appendRow([date, classSection, category, hours, username, now]);
+      if (hoursRecCol !== -1) hoursSheet.getRange(hoursSheet.getLastRow(), hoursRecCol + 1).setValue(recId);
     }
     
     // Now update existing attendance records
@@ -2237,16 +2260,19 @@ function updateBatchHours(date, classSection, category, hours, username) {
     const classSectionCol = headers.indexOf('Class_Section');
     const hoursCol = headers.indexOf('Hours');
     const categoryCol = headers.indexOf('Category');
-    
+    const attRecCol = headers.indexOf('REC_ID')
+
     if (dateCol === -1 || classSectionCol === -1 || hoursCol === -1 || categoryCol === -1) {
       return { success: false, message: 'Required columns not found in attendance sheet.' };
     }
     
     let updatedCount = 0;
-    
+    const aRowRec = (attRecCol !== -1) ? String(attendanceData[i][attRecCol] || '').trim() : '';
+    const aRecMatches = !recId || attRecCol === -1 || aRowRec === '' || aRowRec === String(recId).trim();
+
     for (let i = 1; i < attendanceData.length; i++) {
       const rowDate = new Date(attendanceData[i][dateCol]).toLocaleDateString('en-CA');
-      if (rowDate === targetDate && attendanceData[i][classSectionCol] === classSection) {
+      if (rowDate === targetDate && attendanceData[i][classSectionCol] === classSection && aRecMatches) {
         attendanceSheet.getRange(i + 1, hoursCol + 1).setValue(hours);
         attendanceSheet.getRange(i + 1, categoryCol + 1).setValue(category);
         updatedCount++;
@@ -2315,7 +2341,7 @@ function getUserPermissions(username) {
 // =============== REPORT FUNCTIONS ===============
 
 // NEW: Generate student attendance report for PDF/CSV download
-function generateStudentAttendanceReport(date, classSection) {
+function generateStudentAttendanceReport(date, classSection, recId) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     
@@ -2340,12 +2366,15 @@ function generateStudentAttendanceReport(date, classSection) {
     const targetDate = new Date(date).toLocaleDateString('en-CA');
     
     // Filter attendance records for the specific date and class
+    const attRecCol = headerMap.has('REC_ID') ? headerMap.get('REC_ID') : -1;
     const filteredAttendance = [];
     for (let i = 1; i < attendanceData.length; i++) {
       const row = attendanceData[i];
       const rowDate = new Date(row[headerMap.get('Date')]).toLocaleDateString('en-CA');
       const rowClass = row[headerMap.get('Student_Class')];
       const rowSection = row[headerMap.get('Student_Section')];
+      const rowRec = (attRecCol !== -1) ? String(row[attRecCol] || '').trim() : '';
+      if (recId && attRecCol !== -1 && rowRec !== '' && rowRec !== String(recId).trim()) continue;
       
       if (rowDate === targetDate && rowClass === className && rowSection === section) {
         filteredAttendance.push({
@@ -2369,9 +2398,12 @@ function generateStudentAttendanceReport(date, classSection) {
       const nameCol = studentHeaderMap.get('Student_Name');
       const classCol = studentHeaderMap.get('Student_Class');
       const sectionCol = studentHeaderMap.get('Student_Section');
+      const sRecCol = studentHeaderMap.has('REC_ID') ? studentHeaderMap.get('REC_ID') : -1;
       
       for (let i = 1; i < studentData.length; i++) {
         const row = studentData[i];
+        const sRowRec = (sRecCol !== -1) ? String(row[sRecCol] || '').trim() : '';
+        if (recId && sRecCol !== -1 && sRowRec !== '' && sRowRec !== String(recId).trim()) continue;
         if (row[classCol] === className && row[sectionCol] === section) {
           filteredAttendance.push({
             studentId: row[stdIdCol],
@@ -2397,7 +2429,7 @@ function generateStudentAttendanceReport(date, classSection) {
 }
 
 // NEW: Generate student monthly summary report
-function generateStudentMonthlySummary(studentId, month, year) {
+function generateStudentMonthlySummary(studentId, month, year, recId) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     
@@ -2445,7 +2477,8 @@ function generateStudentMonthlySummary(studentId, month, year) {
     const statusCol = headerMap.get('Status');
     const hoursCol = headerMap.has('Hours') ? headerMap.get('Hours') : -1;
     const categoryCol = headerMap.has('Category') ? headerMap.get('Category') : -1;
-    
+    const recIdCol = headerMap.has('REC_ID') ? headerMap.get('REC_ID') : -1; 
+
     // Calculate month start and end dates
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 0);
@@ -2459,6 +2492,8 @@ function generateStudentMonthlySummary(studentId, month, year) {
     // Process attendance records
     for (let i = 1; i < attendanceData.length; i++) {
       const row = attendanceData[i];
+      const rowRec = (recIdCol !== -1) ? String(row[recIdCol] || '').trim() : '';
+      if (recId && recIdCol !== -1 && rowRec !== '' && rowRec !== String(recId).trim()) continue;
       
       // Check if this is the right student
       if (String(row[stdIdColAttendance]) !== String(studentId)) {
@@ -2551,7 +2586,7 @@ function getAvailableMonthsForStudent(studentId) {
 }
 
 // NEW: Get all students for dropdown
-function getAllStudents(classSection = null) {
+function getAllStudents(classSection = null, recId) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const studentSheet = ss.getSheetByName('Student_Data');
@@ -2570,6 +2605,7 @@ function getAllStudents(classSection = null) {
     const nameCol = headerMap.get('Student_Name');
     const classCol = headerMap.get('Student_Class');
     const sectionCol = headerMap.get('Student_Section');
+    const recIdCol = headerMap.has('REC_ID') ? headerMap.get('REC_ID') : -1;   // ← naya
     
     const students = [];
     
@@ -2577,6 +2613,8 @@ function getAllStudents(classSection = null) {
       const row = studentData[i];
       const studentClass = row[classCol];
       const studentSection = row[sectionCol];
+      const rowRec = (recIdCol !== -1) ? String(row[recIdCol] || '').trim() : '';
+      if (recId && recIdCol !== -1 && rowRec !== '' && rowRec !== String(recId).trim()) continue;
       
       if (classSection) {
         const [className, section] = classSection.split('-');
