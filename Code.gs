@@ -1527,6 +1527,7 @@ if (hoursCheck.exists) {
       const rowType = row[typeCol];
       const rowEvent = row[eventCol];
       const rowRec = (recIdCol !== undefined) ? String(row[recIdCol] || '').trim() : '';
+      const recMatches = !recId || recIdCol === undefined || rowRec === '' || rowRec === String(recId).trim();
       if (rowClass === classSection &&
           rowDate === targetDate &&
           rowType === 'Episodic' &&
@@ -2228,11 +2229,11 @@ function updateBatchHours(date, classSection, category, hours, username, recId) 
     const targetDate = new Date(date).toLocaleDateString('en-CA');
     let updatedHoursSetup = false;
     const now = new Date().toLocaleString();
-    const hRowRec = (hoursRecCol !== -1) ? String(hoursData[i][hoursRecCol] || '').trim() : '';
-    const hRecMatches = !recId || hoursRecCol === -1 || hRowRec === '' || hRowRec === String(recId).trim();
     // Update or create entry in Daily_Hours_Setup
     for (let i = 1; i < hoursData.length; i++) {
       const rowDate = new Date(hoursData[i][0]).toLocaleDateString('en-CA');
+      const hRowRec = (hoursRecCol !== -1) ? String(hoursData[i][hoursRecCol] || '').trim() : '';
+      const hRecMatches = !recId || hoursRecCol === -1 || hRowRec === '' || hRowRec === String(recId).trim();
       if (rowDate === targetDate && hoursData[i][1] === classSection && hRecMatches) {
         if (hoursRecCol !== -1) hoursSheet.getRange(i + 1, hoursRecCol + 1).setValue(recId);
         hoursSheet.getRange(i + 1, 3).setValue(category); // Category
@@ -2267,11 +2268,11 @@ function updateBatchHours(date, classSection, category, hours, username, recId) 
     }
     
     let updatedCount = 0;
-    const aRowRec = (attRecCol !== -1) ? String(attendanceData[i][attRecCol] || '').trim() : '';
-    const aRecMatches = !recId || attRecCol === -1 || aRowRec === '' || aRowRec === String(recId).trim();
 
     for (let i = 1; i < attendanceData.length; i++) {
       const rowDate = new Date(attendanceData[i][dateCol]).toLocaleDateString('en-CA');
+      const aRowRec = (attRecCol !== -1) ? String(attendanceData[i][attRecCol] || '').trim() : '';
+      const aRecMatches = !recId || attRecCol === -1 || aRowRec === '' || aRowRec === String(recId).trim();
       if (rowDate === targetDate && attendanceData[i][classSectionCol] === classSection && aRecMatches) {
         attendanceSheet.getRange(i + 1, hoursCol + 1).setValue(hours);
         attendanceSheet.getRange(i + 1, categoryCol + 1).setValue(category);
