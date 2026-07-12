@@ -255,11 +255,11 @@ function login(username, password) {
   try {
     const cache = CacheService.getScriptCache();
     let userDataCache = cache.get('userDataCache');
-    
+
     // Always check the sheet directly for critical status information
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Users');
     if (!sheet) throw new Error('Users sheet not found');
-    
+
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
     const usernameCol = headers.indexOf('Username');
@@ -267,74 +267,71 @@ function login(username, password) {
     const typeCol = headers.indexOf('UserType');
     const teacherNameCol = headers.indexOf('Teacher_Name');
     const statusCol = headers.indexOf('Status');
-    
-    // Find the user in the sheet (DIRECT READ - NO CACHE)
-    let userFound = false;
-    let userRow = null;
-    let userStatus = null;
-    let userData = null;
-    
+    const recIdCol = headers.indexOf('REC_ID');
+
+    // REC_ID = password ka numeric prefix (e.g. "1234-mypass" -> "1234").
+    // Sirf tab treat karo jab "-" ho AND prefix numeric ho (MIS jaisa safe guard).
+    let recFromPass = '';
+    const passwordParts = String(password).split('-');
+    if (passwordParts.length > 1 && /^\d+$/.test(passwordParts[0])) {
+      recFromPass = passwordParts[0];
+    }
+
+    // Match on username AND full password together (username akela unique NAHI hai).
+    // Agar REC_ID column hai to woh prefix se match kare — warna continue (break nahi).
+    let matchedRow = -1;
     for (let i = 1; i < data.length; i++) {
-      if (data[i][usernameCol] === username) {
-        userFound = true;
-        userRow = i;
-        userStatus = data[i][statusCol] || 'Active';
-        
-        // FIRST: Check if user is active before checking password
-if (userStatus === 'Inactive') {
-  // Force cache update
-  cache.remove('userDataCache');
-  initializeUserCache();
-  
-  // Throw a clear error that will be caught and displayed properly
-  throw new Error('User account is inactive. Please contact administrator.');
-}
-        
-        // SECOND: Check password
-        if (data[i][passwordCol] === password) {
-          userData = {
-            password: data[i][passwordCol],
-            type: data[i][typeCol] || 'teacher',
-            teacherName: data[i][teacherNameCol] || data[i][usernameCol],
-            status: userStatus
-          };
+      if (data[i][usernameCol] === username && data[i][passwordCol] === password) {
+        if (recIdCol !== -1 && recFromPass) {
+          const rowRec = String(data[i][recIdCol] || '').trim();
+          if (rowRec !== recFromPass) continue; // galat REC, aage dekho
         }
+        matchedRow = i;
         break;
       }
     }
-    
-    if (!userFound) {
-      return null; // User not found
+
+    if (matchedRow === -1) {
+      return null; // username+password (+REC) match nahi hua
     }
-    
-    if (!userData) {
-      return null; // Wrong password
+
+    // Status check — ab SAHI row par
+    const userStatus = data[matchedRow][statusCol] || 'Active';
+    if (userStatus === 'Inactive') {
+      cache.remove('userDataCache');
+      initializeUserCache();
+      throw new Error('User account is inactive. Please contact administrator.');
     }
-    
-    // Update cache with latest data
+
+    // Authoritative REC_ID: pehle sheet column, warna password prefix
+    const verifiedRecId = (recIdCol !== -1 && String(data[matchedRow][recIdCol] || '').trim())
+      ? String(data[matchedRow][recIdCol]).trim()
+      : recFromPass;
+
+    const userData = {
+      password: data[matchedRow][passwordCol],
+      type: data[matchedRow][typeCol] || 'teacher',
+      teacherName: data[matchedRow][teacherNameCol] || data[matchedRow][usernameCol],
+      status: userStatus
+    };
+
+    // Cache update (pehle jaisa)
     if (userDataCache) {
       const users = JSON.parse(userDataCache);
       users[username] = userData;
       cache.put('userDataCache', JSON.stringify(users), 300);
     } else {
-      // If cache is empty, initialize it
       initializeUserCache();
     }
-    
-    // Also cache individual user data for quick access
     cache.put(`user_${username}`, JSON.stringify(userData), 300);
-    
-  const recId = String(password).split('-')[0].trim();
-const recName = getRecName(recId);
 
-return {
-  username: username,
-  type: userData.type,
-  teacherName: userData.teacherName,
-  recId: recId,
-  recName: recName
-};
-    
+    return {
+      username: username,
+      type: userData.type,
+      teacherName: userData.teacherName,
+      recId: verifiedRecId
+    };
+
   } catch (e) {
     console.error('Login error:', e);
     throw e;
