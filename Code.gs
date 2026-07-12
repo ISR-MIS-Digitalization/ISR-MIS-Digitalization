@@ -672,7 +672,7 @@ function parseSheetDate(dateValue) {
   return null;
 }
 
-function getStudentList(classSection, date) {
+function getStudentList(classSection, date, recId) {
   try {
     Logger.log(`getStudentList called with classSection: ${classSection}, date: ${date}`);
     if (!classSection || !classSection.includes('-')) {
@@ -709,6 +709,7 @@ function getStudentList(classSection, date) {
     const sectionCol = studentHeaders.indexOf('Student_Section');
     const statusCol = studentHeaders.indexOf('Status');
     const dojCol = studentHeaders.indexOf('Date_of_Joining');
+    const recIdCol = studentHeaders.indexOf('REC_ID');
 
     for (let i = 1; i < studentData.length; i++) {
       const status = studentData[i][statusCol] ? studentData[i][statusCol].toString().toLowerCase() : '';
@@ -717,11 +718,14 @@ function getStudentList(classSection, date) {
       
       // Check if student should be included based on joining date
       const shouldIncludeByDate = !dateOfJoining || dateOfJoining <= targetDate;
-      
+      const recMatch = !recId || recIdCol === -1 ||
+        String(studentData[i][recIdCol] || '').trim() === '' ||
+        String(studentData[i][recIdCol] || '').trim() === String(recId).trim();
+
       if (studentData[i][classCol] === className && 
           studentData[i][sectionCol] === section && 
           status === 'active' &&
-          shouldIncludeByDate) {
+          shouldIncludeByDate && recMatch) {
         
         studentsMap.set(String(studentData[i][stdIdCol]), {
           Std_ID: String(studentData[i][stdIdCol]),
@@ -746,6 +750,7 @@ function getStudentList(classSection, date) {
     const attendanceData = attendanceSheet.getDataRange().getValues();
     const headers = attendanceData[0];
     const attendanceHeaderMap = new Map(headers.map((h, i) => [h, i]));
+    const attRecCol = attendanceHeaderMap.has('REC_ID') ? attendanceHeaderMap.get('REC_ID') : -1; 
     if (!attendanceHeaderMap.has('Std_ID') || !attendanceHeaderMap.has('Date') || !attendanceHeaderMap.has('Status')) {
       throw new Error('Required headers missing in Student_Attendance sheet');
     }
@@ -753,6 +758,8 @@ function getStudentList(classSection, date) {
         for (let j = 1; j < attendanceData.length; j++) {
       let rowDate = parseSheetDate(attendanceData[j][attendanceHeaderMap.get('Date')]);
       if (!rowDate) continue;
+      const attRowRec = attRecCol !== -1 ? String(attendanceData[j][attRecCol] || '').trim() : '';
+      if (recId && attRecCol !== -1 && attRowRec !== '' && attRowRec !== String(recId).trim()) continue;
       const rowDateString = rowDate.toLocaleDateString('en-CA');
       if (rowDateString === dateString) {
         const stdId = String(attendanceData[j][attendanceHeaderMap.get('Std_ID')]);
